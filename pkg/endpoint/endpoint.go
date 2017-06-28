@@ -188,6 +188,7 @@ type Endpoint struct {
 	SecLabel         *policy.Identity      // Security Label  set to this endpoint.
 	PortMap          []PortMap             // Port mapping used for this endpoint.
 	Consumable       *policy.Consumable
+	PodName          string                // Name of the pod if k8s is enabled. If not, is an empty string.
 	PolicyMap        *policymap.PolicyMap
 	L3Policy         *policy.L3Policy
 	L3Maps           L3Maps

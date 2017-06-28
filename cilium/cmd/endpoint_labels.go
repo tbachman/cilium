@@ -83,5 +83,10 @@ func printEndpointLabels(lbls *labels.OpLabels) {
 		text := common.Red("Disabled")
 		fmt.Fprintf(w, "%s\t%s\n", v, text)
 	}
+
+	for _, v := range lbls.Orchestration {
+		text := common.Red("Orchestration")
+		fmt.Fprintf(w, "%s\t%s\n", v, text)
+	}
 	w.Flush()
 }

@@ -37,7 +37,7 @@ trap finish_test exit
 
 echo "KUBECONFIG: $KUBECONFIG"
 
-cleanup
+#cleanup
 
 wait_for_healthy_k8s_cluster 3
 
@@ -59,6 +59,8 @@ echo "----- deploying demo application onto cluster -----"
 kubectl create -f $MINIKUBE/demo.yaml
 
 wait_for_n_running_pods 4
+
+exit 0
 
 echo "----- adding L3 L4 policy  -----"
 kubectl create -f $MINIKUBE/l3_l4_policy.yaml
