@@ -260,6 +260,7 @@ const (
 type DebugCapture struct {
 	Type    uint8
 	SubType uint8
+	// Source, if populated, is the ID of the source endpoint.
 	Source  uint16
 	Hash    uint32
 	Len     uint32
@@ -268,8 +269,34 @@ type DebugCapture struct {
 	// data
 }
 
+// DumpInfo prints a summary of the capture messages.
+func (n *DebugCapture) DumpInfo(data []byte) {
+	switch n.SubType {
+	case DbgCaptureFromLxc:
+		fmt.Printf("CAPTURE: FROM: [container %d / endpoint %d] %d bytes\n", n.Arg1, n.Source, n.OrigLen)
+	case DbgCaptureFromNetdev:
+		fmt.Printf("CAPTURE: FROM: [netdevice %d / endpoint %d] %d bytes\n", n.Arg1, n.Source, n.OrigLen)
+	case DbgCaptureFromOverlay:
+		fmt.Printf("CAPTURE: FROM: [overlay %d / endpoint %d] %d bytes\n", n.Arg1, n.Source, n.OrigLen)
+	case DbgCaptureDelivery:
+		fmt.Printf("CAPTURE: FROM: [endpoint %d] > TO: [ifindex %d] %d bytes\n", n.Source, n.Arg1, n.OrigLen)
+	case DbgCaptureFromLb:
+		fmt.Printf("CAPTURE: FROM: [endpoint %d]> TO: [load balancer %d] %d bytes\n", n.Source, n.Arg1, n.OrigLen)
+	case DbgCaptureAfterV46:
+		fmt.Printf("CAPTURE: FROM: [endpoint %d] > TO: [endpoint %d] after nat46 %d bytes\n", n.Source, n.Arg1, n.OrigLen)
+	case DbgCaptureAfterV64:
+		fmt.Printf("CAPTURE: FROM: [endpoint %d] > TO: [endpoint %d] after nat64 %d bytes\n", n.Source, n.Arg1, n.OrigLen)
+	case DbgCaptureProxyPre:
+		fmt.Printf("CAPTURE: FROM: [endpoint %d] > TO: proxy port %d (Pre) %d bytes\n", n.Source, byteorder.NetworkToHost(uint16(n.Arg1)), n.OrigLen)
+	case DbgCaptureProxyPost:
+		fmt.Printf("CAPTURE: FROM: [endpoint %d] > TO: proxy port %d (Post) %d bytes\n", n.Source, byteorder.NetworkToHost(uint16(n.Arg1)), n.OrigLen)
+	default:
+		fmt.Printf("Unknown message type=%d arg1=%d\n", n.SubType, n.Arg1)
+	}
+}
+
 // Dump prints the captured packet in human readable format
-func (n *DebugCapture) Dump(dissect bool, data []byte, prefix string) {
+func (n *DebugCapture) DumpVerbose(dissect bool, data []byte, prefix string) {
 	fmt.Printf("%s MARK %#x FROM %d DEBUG: %d bytes ", prefix, n.Hash, n.Source, n.Len)
 	switch n.SubType {
 	case DbgCaptureFromLxc:
