@@ -157,7 +157,11 @@ func debugEvents(prefix string, data []byte) {
 		fmt.Printf("Error while parsing debug message: %s\n", err)
 	}
 	if match(bpfdebug.MessageTypeDebug, dm.Source, 0) {
-		dm.Dump(data, prefix)
+		if verbosity == INFO {
+			dm.DumpInfo(data)
+		} else {
+			dm.Dump(data, prefix)
+		}
 	}
 }
 
@@ -187,10 +191,7 @@ func receiveEvent(msg *bpf.PerfEventSample, cpu int) {
 	case bpfdebug.MessageTypeDrop:
 		dropEvents(prefix, data)
 	case bpfdebug.MessageTypeDebug:
-		// Only display debug events if verbose modes enabled.
-		if verbosity > INFO {
-			debugEvents(prefix, data)
-		}
+		debugEvents(prefix, data)
 	case bpfdebug.MessageTypeCapture:
 		captureEvents(prefix, data)
 	default:

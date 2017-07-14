@@ -158,6 +158,20 @@ type DebugMsg struct {
 	Arg3    uint32
 }
 
+
+func (n *DebugMsg) DumpInfo(data []byte) {
+	switch n.SubType {
+	case DbgEncap:
+		fmt.Printf("from [seclabel %d] > [node %d]\n", n.Arg2,  n.Arg1)
+	case DbgToHost:
+		fmt.Printf("to host, policy-skip=%d\n", n.Arg1)
+	case DbgToStack:
+		fmt.Printf("to stack, policy-skip=%d\n", n.Arg1)
+	case DbgLocalDelivery:
+		fmt.Printf("from [seclabel %d] > [container %d]\n", n.Arg2, n.Arg1)
+	}
+}
+
 // Dump prints the debug message in a human readable format.
 func (n *DebugMsg) Dump(data []byte, prefix string) {
 	fmt.Printf("%s MARK %#x FROM %d DEBUG: ", prefix, n.Hash, n.Source)
@@ -273,23 +287,23 @@ type DebugCapture struct {
 func (n *DebugCapture) DumpInfo(data []byte) {
 	switch n.SubType {
 	case DbgCaptureFromLxc:
-		fmt.Printf("CAPTURE: FROM: [container %d / endpoint %d] %d bytes\n", n.Arg1, n.Source, n.OrigLen)
+		fmt.Printf("from [container %d / endpoint %d]\n", n.Arg1, n.Source)
 	case DbgCaptureFromNetdev:
-		fmt.Printf("CAPTURE: FROM: [netdevice %d / endpoint %d] %d bytes\n", n.Arg1, n.Source, n.OrigLen)
+		fmt.Printf("from [netdev %d / endpoint %d]\n", n.Arg1, n.Source)
 	case DbgCaptureFromOverlay:
-		fmt.Printf("CAPTURE: FROM: [overlay %d / endpoint %d] %d bytes\n", n.Arg1, n.Source, n.OrigLen)
+		fmt.Printf("from [overlay %d / endpoint %d]\n", n.Arg1, n.Source)
 	case DbgCaptureDelivery:
-		fmt.Printf("CAPTURE: FROM: [endpoint %d] > TO: [ifindex %d] %d bytes\n", n.Source, n.Arg1, n.OrigLen)
+		fmt.Printf("from [endpoint %d] > [ifindex %d]\n", n.Source, n.Arg1)
 	case DbgCaptureFromLb:
-		fmt.Printf("CAPTURE: FROM: [endpoint %d]> TO: [load balancer %d] %d bytes\n", n.Source, n.Arg1, n.OrigLen)
+		fmt.Printf("from [endpoint %d] > [load balancer %d]\n", n.Source, n.Arg1)
 	case DbgCaptureAfterV46:
-		fmt.Printf("CAPTURE: FROM: [endpoint %d] > TO: [endpoint %d] after nat46 %d bytes\n", n.Source, n.Arg1, n.OrigLen)
+		fmt.Printf("from [endpoint %d] > [endpoint %d] after nat46\n", n.Source, n.Arg1)
 	case DbgCaptureAfterV64:
-		fmt.Printf("CAPTURE: FROM: [endpoint %d] > TO: [endpoint %d] after nat64 %d bytes\n", n.Source, n.Arg1, n.OrigLen)
+		fmt.Printf("from [endpoint %d] > [endpoint %d] after nat64\n", n.Source, n.Arg1)
 	case DbgCaptureProxyPre:
-		fmt.Printf("CAPTURE: FROM: [endpoint %d] > TO: proxy port %d (Pre) %d bytes\n", n.Source, byteorder.NetworkToHost(uint16(n.Arg1)), n.OrigLen)
+		fmt.Printf("pre-proxy port %d [endpoint %d]\n", byteorder.NetworkToHost(uint16(n.Arg1)), n.Source)
 	case DbgCaptureProxyPost:
-		fmt.Printf("CAPTURE: FROM: [endpoint %d] > TO: proxy port %d (Post) %d bytes\n", n.Source, byteorder.NetworkToHost(uint16(n.Arg1)), n.OrigLen)
+		fmt.Printf("post-proxy port %d [endpoint %d]\n", byteorder.NetworkToHost(uint16(n.Arg1)), n.Source)
 	default:
 		fmt.Printf("Unknown message type=%d arg1=%d\n", n.SubType, n.Arg1)
 	}
