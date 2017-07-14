@@ -158,11 +158,12 @@ type DebugMsg struct {
 	Arg3    uint32
 }
 
-
+// DumpInfo prints a summary of a subset of the debug messages which are related
+// to sending, not processing, of packets.
 func (n *DebugMsg) DumpInfo(data []byte) {
 	switch n.SubType {
 	case DbgEncap:
-		fmt.Printf("from [seclabel %d] > [node %d]\n", n.Arg2,  n.Arg1)
+		fmt.Printf("from [seclabel %d] > [node %d]\n", n.Arg2, n.Arg1)
 	case DbgToHost:
 		fmt.Printf("to host, policy-skip=%d\n", n.Arg1)
 	case DbgToStack:
