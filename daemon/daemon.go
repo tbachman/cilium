@@ -57,9 +57,11 @@ import (
 	"github.com/cilium/cilium/pkg/proxy"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/containernetworking/cni/pkg/ns"
 	cniTypes "github.com/containernetworking/cni/pkg/types"
 	hb "github.com/containernetworking/cni/plugins/ipam/host-local/backend/allocator"
 	dClient "github.com/docker/engine-api/client"
+	dTypes "github.com/docker/engine-api/types"
 	"github.com/go-openapi/runtime/middleware"
 	"github.com/vishvananda/netlink"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -670,6 +672,12 @@ func NewDaemon(c *Config) (*Daemon, error) {
 		buildEndpointChan: make(chan *endpoint.Request, lxcmap.MaxKeys),
 	}
 
+	// Clear previous leftovers before listening for new requests
+	err = d.clearCiliumVeths()
+	if err != nil {
+		log.Debugf("Unable to clean leftover veths: %s", err)
+	}
+
 	// Create the same amount of worker threads as there are CPUs
 	d.StartEndpointBuilders(runtime.NumCPU())
 
@@ -968,4 +976,99 @@ func (d *Daemon) StopIgnoringContainer(id string) {
 	d.ignoredMutex.Lock()
 	delete(d.ignoredContainers, id)
 	d.ignoredMutex.Unlock()
+}
+
+// listFilterIfs returns a map of interfaces based on the given filter.
+// The filter should take a link and, if found, return the index of that
+// interface, if not found return -1.
+func listFilterIfs(filter func(netlink.Link) int) (map[int]netlink.Link, error) {
+	ifs, err := netlink.LinkList()
+	if err != nil {
+		return nil, err
+	}
+	vethLXCIdxs := map[int]netlink.Link{}
+	for _, intf := range ifs {
+		if idx := filter(intf); idx != -1 {
+			vethLXCIdxs[idx] = intf
+		}
+	}
+	return vethLXCIdxs, nil
+}
+
+// clearCiliumVeths checks all veths created by cilium and removes all that
+// are considered a leftover from failed attempts to connect the container.
+func (d *Daemon) clearCiliumVeths() error {
+	dc := d.dockerClient
+
+	leftVeths, err := listFilterIfs(func(intf netlink.Link) int {
+		// Filter by veth, prefixed with "lxc" and return the index
+		// of the interface.
+		if intf.Type() == "veth" &&
+			strings.HasPrefix(intf.Attrs().Name, "lxc") {
+			return intf.Attrs().Index
+		}
+		return -1
+	})
+
+	if err != nil {
+		return fmt.Errorf("unable to retrieve host network interfaces: %s", err)
+	}
+
+	conts, err := dc.ContainerList(context.Background(), dTypes.ContainerListOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to retrieve all containers running in docker: %s", err)
+	}
+
+	pids := []int{}
+	for _, cont := range conts {
+		cjson, err := dc.ContainerInspect(context.Background(), cont.ID)
+		if err != nil {
+			log.Debugf("CleanVeths: Unable to inspect container %s: %s", cont.ID, err)
+		}
+		pids = append(pids, cjson.State.Pid)
+	}
+
+	for _, pid := range pids {
+		nsPath := fmt.Sprintf("/proc/%d/ns/net", pid)
+		netNs, err := ns.GetNS(nsPath)
+		if err != nil {
+			log.Debugf("CleanVeths: Error openning netns %q: %s", nsPath, err)
+			continue
+		}
+		err = netNs.Do(func(_ ns.NetNS) error {
+			containerInterfaces, err := listFilterIfs(func(intf netlink.Link) int {
+				// Filter only by type "veth" and return the
+				// parent index of this veth
+				if intf.Type() == "veth" {
+					return intf.Attrs().ParentIndex
+				}
+				return -1
+			})
+			if err != nil {
+				return err
+			}
+
+			// If parent index was found inside the container then
+			// delete it from the leftVeths.
+			for containerInterface := range containerInterfaces {
+				delete(leftVeths, containerInterface)
+			}
+
+			return nil
+		})
+		if err != nil {
+			log.Debugf("CleanVeths: Error listing namespace's %s veths: %s", nsPath, err)
+		}
+		netNs.Close()
+	}
+
+	for _, v := range leftVeths {
+		log.Infof(`Cleaning unused veth "%d %s"`, v.Attrs().Index, v.Attrs().Name)
+		err := netlink.LinkDel(v)
+		if err != nil {
+			log.Warningf(`CleanVeths: Unable to delete leftover veth "%d %s": %s`,
+				v.Attrs().Index, v.Attrs().Name, err)
+		}
+	}
+	return nil
 }
