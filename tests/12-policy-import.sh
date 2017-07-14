@@ -12,8 +12,7 @@ function cleanup {
 }
 
 #trap cleanup EXIT
-#exit 0
-#cleanup
+cleanup
 logs_clear
 
 docker network inspect $TEST_NET 2> /dev/null || {
@@ -106,7 +105,7 @@ cat <<EOF | cilium -D policy import -
     }]
 }]
 EOF
-exit 0
+
 read -d '' EXPECTED_POLICY <<"EOF" || true
 Tracing From: [any:id.foo] => To: [any:id.bar]
 * Rule 0 {"matchLabels":{"any:id.bar":""}}: match
@@ -172,8 +171,6 @@ L3 verdict: allowed
 Verdict: allowed
 EOF
 
-exit 0
-
 echo "------ verify trace for expected output ------"
 DIFF=$(diff -Nru <(echo "$EXPECTED_POLICY") <(cilium policy trace -s id.foo -d id.bar)) || true
 if [[ "$DIFF" != "" ]]; then
@@ -193,16 +190,24 @@ L3 verdict: allowed
 Verdict: allowed
 EOF
 
-echo "------ verify verbose trace for expected output ------"
+
+echo "------ verify verbose trace for expected output using source and destination labels ------"
 DIFF=$(diff -Nru <(echo "$EXPECTED_POLICY") <(cilium policy trace -s id.foo -d id.bar -v)) || true
 if [[ "$DIFF" != "" ]]; then
-	abort "$DIFF"
+        abort "$DIFF"
 fi
 
 BAR_ID=$(cilium endpoint list | grep id.bar | awk '{ print $1}')
 FOO_SEC_ID=$(cilium endpoint list | grep id.foo | awk '{ print $3}')
+BAR_SEC_ID=$(cilium endpoint list | grep id.bar | awk '{print $3}')
 
 EXPECTED_CONSUMER="$FOO_SEC_ID"
+
+echo "------ verify verbose trace for expected output using security identities ------"
+DIFF=$(diff -Nru <(echo "$EXPECTED_POLICY") <(cilium policy trace --src-identity $FOO_SEC_ID --dst-identity $BAR_SEC_ID -v)) || true
+if [[ "$DIFF" != "" ]]; then
+    abort "$DIFF"
+fi
 
 echo "------ verify allowed consumers ------"
 DIFF=$(diff -Nru <(echo -e "$EXPECTED_CONSUMER") <(cilium endpoint get $BAR_ID | jq '.policy | .["allowed-consumers"] | .[]')) || true
